@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from chess_engine import ChessGame, Move, PIECE_LABELS, piece_kind, piece_symbol, square_name
+from chess_engine import ChessGame, Move, PIECE_LABELS, piece_color, piece_kind, piece_symbol, square_name
 
 st.set_page_config(page_title="Offline Chess Duel", page_icon="♟️", layout="wide")
 
@@ -46,6 +46,12 @@ PAGE_CSS = """
     .status-strip {
         margin: 0.85rem 0 1rem;
         padding: 0.9rem 1rem;
+    }
+    div.stButton > button {
+        min-height: 4.2rem;
+        white-space: pre-line;
+        font-size: 1.05rem;
+        border-radius: 18px;
     }
     .board-frame {
         background: linear-gradient(145deg, #6e4e32, #4b311f);
@@ -111,20 +117,17 @@ PAGE_CSS = """
 def init_state() -> None:
     if "game" not in st.session_state:
         st.session_state.game = ChessGame.new_game()
-    if "source_choice" not in st.session_state:
-        st.session_state.source_choice = ""
-    if "destination_choice" not in st.session_state:
-        st.session_state.destination_choice = ""
-    if "promotion_choice" not in st.session_state:
-        st.session_state.promotion_choice = "Q"
+    if "selected_square" not in st.session_state:
+        st.session_state.selected_square = None
+    if "pending_promotion" not in st.session_state:
+        st.session_state.pending_promotion = None
     if "notice" not in st.session_state:
-        st.session_state.notice = ("info", "Choose a piece and destination to start the match.")
+        st.session_state.notice = ("info", "Click one of the current player's pieces, then click a destination square.")
 
 
-def reset_controls(message: tuple[str, str] | None = None) -> None:
-    st.session_state.source_choice = ""
-    st.session_state.destination_choice = ""
-    st.session_state.promotion_choice = "Q"
+def reset_interaction(message: tuple[str, str] | None = None) -> None:
+    st.session_state.selected_square = None
+    st.session_state.pending_promotion = None
     if message is not None:
         st.session_state.notice = message
 
@@ -215,6 +218,97 @@ def show_notice(level: str, message: str) -> None:
         st.info(message)
 
 
+def current_legal_moves(game: ChessGame) -> list[Move]:
+    selected_square = st.session_state.selected_square
+    if selected_square is None:
+        return []
+    return game.legal_moves_for_square(selected_square)
+
+
+def complete_move(game: ChessGame, start: tuple[int, int], end: tuple[int, int], promotion: str = "Q") -> None:
+    success, message = game.move_piece(start, end, promotion)
+    reset_interaction(("success", message) if success else ("error", message))
+
+
+def handle_square_click(game: ChessGame, square: tuple[int, int]) -> None:
+    if game.game_over:
+        st.session_state.notice = ("warning", "This game is over. Start a new game or undo the last move.")
+        return
+
+    if st.session_state.pending_promotion is not None:
+        st.session_state.notice = ("info", "Choose the promotion piece first.")
+        return
+
+    selected_square = st.session_state.selected_square
+    clicked_piece = game.get_piece(square)
+    can_select_clicked_piece = (
+        clicked_piece is not None
+        and piece_color(clicked_piece) == game.turn
+        and bool(game.legal_moves_for_square(square))
+    )
+
+    if selected_square is None:
+        if can_select_clicked_piece:
+            st.session_state.selected_square = square
+            st.session_state.notice = ("info", f"Selected {square_name(square)}. Now click a destination square.")
+        else:
+            st.session_state.notice = ("warning", "Click one of the current player's movable pieces.")
+        return
+
+    if square == selected_square:
+        st.session_state.selected_square = None
+        st.session_state.notice = ("info", "Selection cleared.")
+        return
+
+    legal_moves = {move.end: move for move in game.legal_moves_for_square(selected_square)}
+    if square in legal_moves:
+        move = legal_moves[square]
+        if move.promotion is not None:
+            st.session_state.pending_promotion = (selected_square, square)
+            st.session_state.notice = ("info", "Choose a promotion piece to finish the move.")
+        else:
+            complete_move(game, selected_square, square)
+        return
+
+    if can_select_clicked_piece:
+        st.session_state.selected_square = square
+        st.session_state.notice = ("info", f"Selected {square_name(square)}. Now click a destination square.")
+    else:
+        st.session_state.notice = ("warning", "That square is not a legal destination.")
+
+
+def complete_promotion(game: ChessGame, promotion: str) -> None:
+    pending_promotion = st.session_state.pending_promotion
+    if pending_promotion is None:
+        return
+    start, end = pending_promotion
+    complete_move(game, start, end, promotion)
+
+
+def square_button_label(
+    game: ChessGame,
+    square: tuple[int, int],
+    legal_targets: set[tuple[int, int]],
+    ready_sources: set[tuple[int, int]],
+) -> str:
+    piece = game.get_piece(square)
+    symbol = piece_symbol(piece) or ("•" if square in legal_targets else "·")
+    footer = square_name(square)
+
+    if game.is_in_check(game.turn) and square == game.find_king(game.turn):
+        footer += " !"
+    elif square == st.session_state.selected_square:
+        footer += " *"
+    elif square in legal_targets:
+        footer += " ->"
+    elif st.session_state.selected_square is None and square in ready_sources:
+        footer += " +"
+    elif game.last_move is not None and square in {game.last_move.start, game.last_move.end}:
+        footer += " •"
+
+    return f"{symbol}\n{footer}"
+
+
 init_state()
 game: ChessGame = st.session_state.game
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
@@ -233,67 +327,44 @@ notice_level, notice_message = st.session_state.notice
 show_notice(notice_level, notice_message)
 
 available_sources = game.available_source_squares()
-source_lookup = {source_label(game, square): square for square in available_sources}
-source_options = [""] + list(source_lookup)
-if st.session_state.source_choice not in source_options:
-    st.session_state.source_choice = ""
-
-selected_source_label = st.selectbox(
-    "Piece to move",
-    source_options,
-    key="source_choice",
-    format_func=lambda option: option or "Choose a legal piece",
-)
-selected_source = source_lookup.get(selected_source_label)
-legal_moves = game.legal_moves_for_square(selected_source) if selected_source is not None else []
+selected_source = st.session_state.selected_square
+legal_moves = current_legal_moves(game)
 legal_targets = {move.end for move in legal_moves}
-
-destination_lookup = {destination_label(move): move for move in legal_moves}
-destination_options = [""] + list(destination_lookup)
-if st.session_state.destination_choice not in destination_options:
-    st.session_state.destination_choice = ""
-
-selected_destination_label = st.selectbox(
-    "Destination",
-    destination_options,
-    key="destination_choice",
-    format_func=lambda option: option or "Choose a target square",
-    disabled=not destination_lookup,
-)
-selected_move = destination_lookup.get(selected_destination_label)
-if selected_move is not None and selected_move.promotion is not None:
-    st.selectbox(
-        "Promotion piece",
-        ["Q", "R", "B", "N"],
-        key="promotion_choice",
-        format_func=lambda code: PIECE_LABELS[code],
-    )
+ready_sources = set() if selected_source is not None else set(available_sources)
 
 control_col, board_col = st.columns([0.92, 1.28], gap="large")
 with control_col:
     st.subheader("Match Controls")
     st.markdown(f"**Turn:** `{game.turn.capitalize()}`")
+    st.markdown(
+        f"**Selected square:** `{square_name(selected_source)}`"
+        if selected_source is not None
+        else "**Selected square:** `None`"
+    )
     st.markdown(f"**White captured:** {' '.join(piece_symbol(piece) for piece in game.captured_pieces['white']) or 'None'}")
     st.markdown(f"**Black captured:** {' '.join(piece_symbol(piece) for piece in game.captured_pieces['black']) or 'None'}")
+    st.caption("Legend: `+` movable piece, `*` selected, `->` legal target, `!` checked king, `•` last move.")
 
-    if st.button("Play move", type="primary", disabled=selected_move is None, use_container_width=True):
-        if selected_move is not None:
-            success, message = game.move_piece(
-                selected_move.start,
-                selected_move.end,
-                st.session_state.promotion_choice,
-            )
-        reset_controls(("success", message) if success else ("error", message))
+    if st.session_state.pending_promotion is not None:
+        st.markdown("**Promotion**")
+        promo_cols = st.columns(4, gap="small")
+        for column, code in zip(promo_cols, ["Q", "R", "B", "N"]):
+            if column.button(PIECE_LABELS[code], key=f"promote_{code}", use_container_width=True):
+                complete_promotion(game, code)
+                st.rerun()
+
+    if st.button("Clear selection", disabled=selected_source is None, use_container_width=True):
+        reset_interaction(("info", "Selection cleared."))
         st.rerun()
 
     if st.button("Undo last move", disabled=not game.history_stack, use_container_width=True):
         success, message = game.undo()
-        reset_controls(("info", message) if success else ("warning", message))
+        reset_interaction(("info", message) if success else ("warning", message))
         st.rerun()
 
     if st.button("Start new game", use_container_width=True):
         st.session_state.game = ChessGame.new_game()
-        reset_controls(("info", "Fresh board ready. White to move."))
+        reset_interaction(("info", "Fresh board ready. White to move."))
         st.rerun()
 
     st.subheader("Move List")
@@ -301,12 +372,40 @@ with control_col:
 
 with board_col:
     st.subheader("Board")
+    st.caption("Click a piece, then click the square you want to move it to.")
     st.markdown(
         render_board(
             game,
             selected_source,
             legal_targets,
-            set() if selected_source is not None else set(available_sources),
+            ready_sources,
         ),
         unsafe_allow_html=True,
     )
+
+    file_header = st.columns([0.5] + [1] * 8 + [0.5], gap="small")
+    for index, file_name in enumerate("abcdefgh", start=1):
+        file_header[index].markdown(f"**{file_name}**")
+
+    for row_index in range(8):
+        rank = 8 - row_index
+        row_cols = st.columns([0.5] + [1] * 8 + [0.5], gap="small")
+        row_cols[0].markdown(f"**{rank}**")
+        for col_index in range(8):
+            square = (row_index, col_index)
+            button_type = "primary" if (
+                square == selected_source or square in legal_targets or square in ready_sources
+            ) else "secondary"
+            if row_cols[col_index + 1].button(
+                square_button_label(game, square, legal_targets, ready_sources),
+                key=f"square_{row_index}_{col_index}",
+                type=button_type,
+                use_container_width=True,
+            ):
+                handle_square_click(game, square)
+                st.rerun()
+        row_cols[-1].markdown(f"**{rank}**")
+
+    file_footer = st.columns([0.5] + [1] * 8 + [0.5], gap="small")
+    for index, file_name in enumerate("abcdefgh", start=1):
+        file_footer[index].markdown(f"**{file_name}**")
