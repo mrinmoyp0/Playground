@@ -1,1 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline Chess Board</title>
+    <style>
+      :root {
+        --page: #f5efe2;
+        --frame-dark: #4f321f;
+        --frame-mid: #704928;
+        --frame-light: #a3713f;
+        --light-square: #f3ddba;
+        --dark-square: #a6784a;
+        --piece-light: #fff7ee;
+        --piece-dark: #22150f;
+        --target: #d6aa4b;
+        --selected: #e8be66;
+        --movable: #6f94bd;
+        --check: #c84f43;
+        --text: #2d2117;
+        --muted: rgba(45, 33, 23, 0.72);
+      }
 
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        font-family: "Georgia", "Times New Roman", serif;
+        color: var(--text);
+      }
+
+      body {
+        padding: 10px 6px;
+      }
+
+      .stage {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+
+      .frame {
+        position: relative;
+        padding: 14px;
+        border-radius: 28px;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 40%),
+          linear-gradient(145deg, var(--frame-light), var(--frame-mid) 35%, var(--frame-dark) 100%);
+        box-shadow:
+          0 24px 50px rgba(62, 39, 18, 0.24),
+          inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      }
+
+      .inner-frame {
+        position: relative;
+        padding: 12px;
+        border-radius: 22px;
+        background:
+          radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 30%),
+          linear-gradient(180deg, #613e23, #4a2e1c);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      }
+
+      .board-shell {
+        position: relative;
+        overflow: hidden;
+        border-radius: 16px;
+        background: #5a3820;
+      }
+
+      .axis-row,
+      .board-row {
+        display: grid;
+        grid-template-columns: 26px repeat(8, minmax(0, 1fr)) 26px;
+        gap: 0;
+      }
+
+      .axis-cell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 26px;
+        color: rgba(255, 246, 233, 0.86);
+        font-size: 0.84rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        user-select: none;
+      }
+
+      .axis-cell.corner {
+        color: transparent;
+      }
+
+      .square {
+        position: relative;
+        border: none;
+        padding: 0;
+        margin: 0;
+        aspect-ratio: 1 / 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition:
+          transform 120ms ease,
+          filter 120ms ease,
+          box-shadow 120ms ease;
+        font: inherit;
+      }
+
+      .square.light {
+        background: linear-gradient(180deg, #f9e8c9, var(--light-square));
+      }
+
+      .square.dark {
+        background: linear-gradient(180deg, #b08151, var(--dark-square));
+      }
+
+      .square:hover {
+        transform: scale(1.02);
+        filter: brightness(1.03);
+        z-index: 2;
+      }
+
+      .square:active {
+        transform: scale(0.99);
+      }
+
+      .square.selected {
+        box-shadow: inset 0 0 0 5px rgba(232, 190, 102, 0.98);
+      }
+
+      .square.legal-target,
+      .square.last-move {
+        box-shadow: inset 0 0 0 4px rgba(214, 170, 75, 0.82);
+      }
+
+      .square.movable-source::after {
+        content: "";
+        position: absolute;
+        inset: 8px;
+        border-radius: 12px;
+        border: 2px solid rgba(111, 148, 189, 0.35);
+        pointer-events: none;
+      }
+
+      .square.checked {
+        box-shadow: inset 0 0 0 5px rgba(200, 79, 67, 0.95);
+      }
+
+      .piece {
+        position: relative;
+        z-index: 1;
+        font-size: clamp(2rem, 6vw, 3.45rem);
+        line-height: 1;
+        user-select: none;
+        pointer-events: none;
+      }
+
+      .piece.white {
+        color: var(--piece-light);
+        text-shadow:
+          0 1px 0 #75543a,
+          0 2px 10px rgba(0, 0, 0, 0.14);
+      }
+
+      .piece.black {
+        color: var(--piece-dark);
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+
+      .target-dot {
+        width: 18%;
+        height: 18%;
+        min-width: 12px;
+        min-height: 12px;
+        border-radius: 999px;
+        background: rgba(60, 44, 29, 0.42);
+        pointer-events: none;
+      }
+
+      .board-caption {
+        margin-top: 12px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .promotion-overlay {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(31, 19, 11, 0.48);
+        backdrop-filter: blur(2px);
+      }
+
+      .promotion-overlay.active {
+        display: flex;
+      }
+
+      .promotion-card {
+        width: min(92%, 420px);
+        padding: 18px;
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(255, 249, 240, 0.98), rgba(245, 233, 214, 0.96));
+        box-shadow: 0 20px 42px rgba(34, 22, 12, 0.24);
+        color: var(--text);
+      }
+
+      .promotion-title {
+        margin: 0 0 12px;
+        text-align: center;
+        font-size: 1.05rem;
+        font-weight: 700;
+      }
+
+      .promotion-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .promotion-option {
+        border: 1px solid rgba(94, 61, 30, 0.18);
+        border-radius: 16px;
+        padding: 12px 8px;
+        background: linear-gradient(180deg, #fffaf1, #f0dfc2);
+        cursor: pointer;
+        transition: transform 120ms ease, box-shadow 120ms ease;
+      }
+
+      .promotion-option:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 24px rgba(53, 34, 15, 0.12);
+      }
+
+      .promotion-symbol {
+        display: block;
+        font-size: 2.2rem;
+        line-height: 1;
+        margin-bottom: 6px;
+      }
+
+      .promotion-label {
+        display: block;
+        font-size: 0.92rem;
+        font-weight: 700;
+      }
+
+      .board-shell.disabled .square {
+        cursor: default;
+        filter: grayscale(0.15);
+      }
+
+      @media (max-width: 640px) {
+        body {
+          padding: 6px 2px;
+        }
+
+        .frame {
+          padding: 10px;
+          border-radius: 22px;
+        }
+
+        .inner-frame {
+          padding: 8px;
+        }
+
+        .axis-row,
+        .board-row {
+          grid-template-columns: 20px repeat(8, minmax(0, 1fr)) 20px;
+        }
+
+        .axis-cell {
+          font-size: 0.72rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <script>
+      const FILES = "abcdefgh";
+      const PIECE_LABELS = {
+        K: "King",
+        Q: "Queen",
+        R: "Rook",
+        B: "Bishop",
+        N: "Knight",
+        P: "Pawn",
+      };
+      const PROMOTION_SYMBOLS = {
+        white: { Q: "♕", R: "♖", B: "♗", N: "♘" },
+        black: { Q: "♛", R: "♜", B: "♝", N: "♞" },
+      };
+
+      let currentState = {};
+      let clickCounter = 0;
+
+      function sendMessage(type, payload = {}) {
+        window.parent.postMessage(
+          {
+            isStreamlitMessage: true,
+            type,
+            ...payload,
+          },
+          "*",
+        );
+      }
+
+      function setComponentReady() {
+        sendMessage("streamlit:componentReady", { apiVersion: 1 });
+      }
+
+      function setFrameHeight() {
+        const height = Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight,
+        );
+        sendMessage("streamlit:setFrameHeight", { height });
+      }
+
+      function setComponentValue(value) {
+        sendMessage("streamlit:setComponentValue", { value });
+      }
+
+      function isLightSquare(rowIndex, colIndex) {
+        return (rowIndex + colIndex) % 2 === 0;
+      }
+
+      function squareName(rowIndex, colIndex) {
+        return `${FILES[colIndex]}${8 - rowIndex}`;
+      }
+
+      function buildAxisRow() {
+        const labels = ['<div class="axis-cell corner"></div>'];
+        for (const fileName of FILES) {
+          labels.push(`<div class="axis-cell">${fileName}</div>`);
+        }
+        labels.push('<div class="axis-cell corner"></div>');
+        return `<div class="axis-row">${labels.join("")}</div>`;
+      }
+
+      function emitSquareClick(square) {
+        setComponentValue({
+          kind: "square",
+          square,
+          event_id: `square-${++clickCounter}`,
+        });
+      }
+
+      function emitPromotion(piece) {
+        setComponentValue({
+          kind: "promotion",
+          piece,
+          event_id: `promotion-${++clickCounter}`,
+        });
+      }
+
+      function buildSquare(cell, square, rowIndex, colIndex, disabled) {
+        const classes = ["square", isLightSquare(rowIndex, colIndex) ? "light" : "dark"];
+        const selectedSquare = currentState.selected_square;
+        const legalTargets = new Set(currentState.legal_targets || []);
+        const movableSources = new Set(currentState.movable_sources || []);
+        const lastMove = new Set(currentState.last_move || []);
+        const checkedKing = currentState.checked_king;
+
+        if (square === selectedSquare) {
+          classes.push("selected");
+        }
+        if (legalTargets.has(square)) {
+          classes.push("legal-target");
+        }
+        if (movableSources.has(square) && !selectedSquare) {
+          classes.push("movable-source");
+        }
+        if (lastMove.has(square)) {
+          classes.push("last-move");
+        }
+        if (checkedKing === square) {
+          classes.push("checked");
+        }
+
+        const titleParts = [square];
+        let content = '<span aria-hidden="true"></span>';
+        if (cell) {
+          titleParts.push(`${cell.color === "white" ? "White" : "Black"} ${PIECE_LABELS[cell.kind]}`);
+          content = `<span class="piece ${cell.color}">${cell.symbol}</span>`;
+        } else if (legalTargets.has(square)) {
+          titleParts.push("Legal move");
+          content = '<span class="target-dot"></span>';
+        }
+
+        const disabledAttribute = disabled ? "disabled" : "";
+        return `
+          <button
+            class="${classes.join(" ")}"
+            data-square="${square}"
+            title="${titleParts.join(" | ")}"
+            ${disabledAttribute}
+          >
+            ${content}
+          </button>
+        `;
+      }
+
+      function buildBoardRows(disabled) {
+        const rows = [];
+        const board = currentState.board || [];
+
+        for (let rowIndex = 0; rowIndex < 8; rowIndex += 1) {
+          const rank = 8 - rowIndex;
+          const squares = [`<div class="axis-cell">${rank}</div>`];
+          for (let colIndex = 0; colIndex < 8; colIndex += 1) {
+            const square = squareName(rowIndex, colIndex);
+            squares.push(buildSquare(board[rowIndex]?.[colIndex] || null, square, rowIndex, colIndex, disabled));
+          }
+          squares.push(`<div class="axis-cell">${rank}</div>`);
+          rows.push(`<div class="board-row">${squares.join("")}</div>`);
+        }
+
+        return rows.join("");
+      }
+
+      function buildPromotionOverlay() {
+        const promotion = currentState.promotion || {};
+        if (!promotion.active) {
+          return '<div class="promotion-overlay"></div>';
+        }
+
+        const color = promotion.color || "white";
+        const buttons = ["Q", "R", "B", "N"]
+          .map(
+            (piece) => `
+              <button class="promotion-option" data-promotion="${piece}" title="Promote to ${PIECE_LABELS[piece]}">
+                <span class="promotion-symbol">${PROMOTION_SYMBOLS[color][piece]}</span>
+                <span class="promotion-label">${PIECE_LABELS[piece]}</span>
+              </button>
+            `,
+          )
+          .join("");
+
+        return `
+          <div class="promotion-overlay active">
+            <div class="promotion-card">
+              <div class="promotion-title">Choose the promotion piece</div>
+              <div class="promotion-grid">${buttons}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function render() {
+        const app = document.getElementById("app");
+        const promotionActive = Boolean(currentState.promotion && currentState.promotion.active);
+        const disabled = Boolean(currentState.disabled || promotionActive);
+        app.innerHTML = `
+          <div class="stage">
+            <div class="frame">
+              <div class="inner-frame">
+                <div class="board-shell ${disabled ? "disabled" : ""}">
+                  ${buildAxisRow()}
+                  ${buildBoardRows(disabled)}
+                  ${buildAxisRow()}
+                  ${buildPromotionOverlay()}
+                </div>
+                <div class="board-caption">Click a piece, then click its destination on this board.</div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        app.querySelectorAll("[data-square]").forEach((button) => {
+          button.addEventListener("click", () => {
+            if (!promotionActive) {
+              emitSquareClick(button.dataset.square);
+            }
+          });
+        });
+
+        app.querySelectorAll("[data-promotion]").forEach((button) => {
+          button.addEventListener("click", () => {
+            emitPromotion(button.dataset.promotion);
+          });
+        });
+
+        requestAnimationFrame(setFrameHeight);
+      }
+
+      window.addEventListener("message", (event) => {
+        if (!event.data || event.data.type !== "streamlit:render") {
+          return;
+        }
+        currentState = {
+          ...(event.data.args?.board_state || {}),
+          disabled: Boolean(event.data.disabled),
+        };
+        render();
+      });
+
+      window.addEventListener("load", () => {
+        setComponentReady();
+        setFrameHeight();
+      });
+    </script>
+  </body>
+</html>
