@@ -214,7 +214,7 @@ st.markdown(
     """
     <div class="hero">
         <h1>Offline Chess Duel</h1>
-        <p>Local two-player chess in Streamlit, built for one device and no internet. The board now uses a custom HTML, CSS, and JavaScript component so the visible chessboard itself is the interactive surface.</p>
+        <p>Local two-player chess</p>
     </div>
     """,
     unsafe_allow_html=True,
