@@ -13,6 +13,8 @@ PAGE_CSS = """
         --panel: rgba(255, 249, 239, 0.92);
         --light-square: #f1ddbf;
         --dark-square: #9a6f47;
+        --highlight-square: #ddb15f;
+        --highlight-ink: #2b1d0f;
     }
     .stApp {
         background:
@@ -47,68 +49,56 @@ PAGE_CSS = """
         margin: 0.85rem 0 1rem;
         padding: 0.9rem 1rem;
     }
+    [data-testid="stHorizontalBlock"] {
+        align-items: center;
+    }
     div.stButton > button {
-        min-height: 4.2rem;
+        min-height: 4.4rem;
         white-space: pre-line;
-        font-size: 1.05rem;
-        border-radius: 18px;
-    }
-    .board-frame {
-        background: linear-gradient(145deg, #6e4e32, #4b311f);
-        padding: 1rem;
-        border-radius: 28px;
-        box-shadow: 0 18px 44px rgba(48, 28, 12, 0.18);
-        width: fit-content;
-        margin: 0 auto;
-    }
-    table.chess-board {
-        border-collapse: collapse;
-        overflow: hidden;
-        border-radius: 18px;
-        background: #5b3c24;
-    }
-    table.chess-board td, table.chess-board th {
-        text-align: center;
-        vertical-align: middle;
-        width: clamp(2.6rem, 9vw, 4.8rem);
-        height: clamp(2.6rem, 9vw, 4.8rem);
+        font-size: 2rem;
+        border-radius: 0.15rem;
         padding: 0;
+        border: 1px solid rgba(59, 34, 15, 0.18);
+        box-shadow: none;
+        transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
     }
-    table.chess-board th.axis {
-        color: rgba(255, 250, 243, 0.85);
-        background: rgba(59, 34, 15, 0.85);
+    div.stButton > button:hover {
+        transform: scale(1.015);
+        filter: brightness(1.03);
+    }
+    div.stButton > button[kind="primary"] {
+        background: var(--dark-square);
+        color: #fff8f1;
+    }
+    div.stButton > button[kind="secondary"] {
+        background: var(--light-square);
+        color: #1f1710;
+    }
+    div.stButton > button[kind="tertiary"] {
+        background: linear-gradient(180deg, #f3cf86, var(--highlight-square));
+        color: var(--highlight-ink);
+        border: 2px solid #a8752f;
+        box-shadow: inset 0 0 0 1px rgba(255, 247, 226, 0.55);
+    }
+    .axis-cell {
+        text-align: center;
+        color: rgba(255, 250, 243, 0.9);
         font-size: 0.92rem;
         font-weight: 600;
-    }
-    table.chess-board td.square {
-        font-size: clamp(1.6rem, 5vw, 2.5rem);
-        font-weight: 700;
         line-height: 1;
+        padding-top: 0.2rem;
     }
-    table.chess-board td.light { background: var(--light-square); }
-    table.chess-board td.dark { background: var(--dark-square); }
-    table.chess-board td.last-move { box-shadow: inset 0 0 0 999px rgba(244, 194, 124, 0.34); }
-    table.chess-board td.selected { box-shadow: inset 0 0 0 5px rgba(227, 180, 76, 0.95); }
-    table.chess-board td.ready { box-shadow: inset 0 0 0 4px rgba(183, 199, 231, 0.78); }
-    table.chess-board td.target { box-shadow: inset 0 0 0 5px rgba(115, 183, 157, 0.95); }
-    table.chess-board td.check { box-shadow: inset 0 0 0 5px rgba(217, 100, 89, 0.95); }
-    .piece.white {
-        color: #fff8f1;
-        text-shadow: 0 1px 0 #5d4632, 0 0 8px rgba(0, 0, 0, 0.12);
+    .board-note, .board-heading {
+        text-align: center;
+        color: rgba(43, 33, 24, 0.78);
     }
-    .piece.black {
-        color: #21150f;
-        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.12);
-    }
-    .marker {
-        color: rgba(23, 56, 46, 0.88);
-        font-size: 2rem;
+    .board-heading {
+        margin-bottom: 0.65rem;
+        font-size: 1rem;
     }
     .board-note {
-        text-align: center;
         margin-top: 0.85rem;
-        color: rgba(43, 33, 24, 0.78);
-        font-size: 0.96rem;
+        font-size: 0.94rem;
     }
 </style>
 """
@@ -130,70 +120,6 @@ def reset_interaction(message: tuple[str, str] | None = None) -> None:
     st.session_state.pending_promotion = None
     if message is not None:
         st.session_state.notice = message
-
-
-def source_label(game: ChessGame, square: tuple[int, int]) -> str:
-    piece = game.get_piece(square)
-    return f"{square_name(square)}  {piece_symbol(piece)} {PIECE_LABELS[piece_kind(piece) or 'P']}"
-
-
-def destination_label(move: Move) -> str:
-    if move.is_castling:
-        side = "Kingside castle" if move.end[1] == 6 else "Queenside castle"
-        return f"{square_name(move.end)}  {side}"
-    details = ["Capture" if move.captured else "Move"]
-    if move.is_en_passant:
-        details = ["En passant"]
-    if move.promotion is not None:
-        details.append("Promote")
-    return f"{square_name(move.end)}  {' / '.join(details)}"
-
-
-def render_board(
-    game: ChessGame,
-    selected_source: tuple[int, int] | None,
-    legal_targets: set[tuple[int, int]],
-    ready_sources: set[tuple[int, int]],
-) -> str:
-    checked_king = game.find_king(game.turn) if game.is_in_check(game.turn) else None
-    rows = ["<div class='board-frame'><table class='chess-board'><thead><tr><th class='axis'></th>"]
-    rows.extend(f"<th class='axis'>{file_name}</th>" for file_name in "abcdefgh")
-    rows.append("</tr></thead><tbody>")
-    last_move_squares = {game.last_move.start, game.last_move.end} if game.last_move else set()
-
-    for row_index in range(8):
-        rank = 8 - row_index
-        rows.append(f"<tr><th class='axis'>{rank}</th>")
-        for col_index in range(8):
-            square = (row_index, col_index)
-            classes = ["square", "light" if (row_index + col_index) % 2 == 0 else "dark"]
-            if square in last_move_squares:
-                classes.append("last-move")
-            if square == selected_source:
-                classes.append("selected")
-            elif selected_source is None and square in ready_sources:
-                classes.append("ready")
-            if square in legal_targets:
-                classes.append("target")
-            if square == checked_king:
-                classes.append("check")
-
-            piece = game.get_piece(square)
-            if piece is not None:
-                color_class = "white" if piece.startswith("w") else "black"
-                content = f"<span class='piece {color_class}'>{piece_symbol(piece)}</span>"
-            elif square in legal_targets:
-                content = "<span class='marker'>•</span>"
-            else:
-                content = "&nbsp;"
-            rows.append(f"<td class='{' '.join(classes)}' title='{square_name(square)}'>{content}</td>")
-        rows.append(f"<th class='axis'>{rank}</th></tr>")
-
-    rows.append("</tbody><tfoot><tr><th class='axis'></th>")
-    rows.extend(f"<th class='axis'>{file_name}</th>" for file_name in "abcdefgh")
-    rows.append("</tr></tfoot></table></div>")
-    rows.append("<div class='board-note'>Highlights show legal sources, selected moves, the last move, and a checked king.</div>")
-    return "".join(rows)
 
 
 def format_move_history(move_history: list[str]) -> str:
@@ -289,24 +215,43 @@ def square_button_label(
     game: ChessGame,
     square: tuple[int, int],
     legal_targets: set[tuple[int, int]],
+) -> str:
+    piece = game.get_piece(square)
+    return piece_symbol(piece) or ("•" if square in legal_targets else " ")
+
+
+def square_button_type(
+    game: ChessGame,
+    square: tuple[int, int],
+    selected_source: tuple[int, int] | None,
+    legal_targets: set[tuple[int, int]],
+) -> str:
+    in_check_square = game.is_in_check(game.turn) and square == game.find_king(game.turn)
+    is_last_move_square = game.last_move is not None and square in {game.last_move.start, game.last_move.end}
+    if square == selected_source or square in legal_targets or in_check_square or is_last_move_square:
+        return "tertiary"
+    return "secondary" if (square[0] + square[1]) % 2 == 0 else "primary"
+
+
+def square_help(
+    game: ChessGame,
+    square: tuple[int, int],
+    selected_source: tuple[int, int] | None,
+    legal_targets: set[tuple[int, int]],
     ready_sources: set[tuple[int, int]],
 ) -> str:
     piece = game.get_piece(square)
-    symbol = piece_symbol(piece) or ("•" if square in legal_targets else "·")
-    footer = square_name(square)
-
-    if game.is_in_check(game.turn) and square == game.find_king(game.turn):
-        footer += " !"
-    elif square == st.session_state.selected_square:
-        footer += " *"
+    parts = [square_name(square)]
+    if piece is not None:
+        color = "White" if piece.startswith("w") else "Black"
+        parts.append(f"{color} {PIECE_LABELS[piece_kind(piece) or 'P']}")
+    if square == selected_source:
+        parts.append("Selected")
     elif square in legal_targets:
-        footer += " ->"
-    elif st.session_state.selected_square is None and square in ready_sources:
-        footer += " +"
-    elif game.last_move is not None and square in {game.last_move.start, game.last_move.end}:
-        footer += " •"
-
-    return f"{symbol}\n{footer}"
+        parts.append("Legal move")
+    elif selected_source is None and square in ready_sources:
+        parts.append("Movable piece")
+    return " | ".join(parts)
 
 
 init_state()
@@ -332,7 +277,43 @@ legal_moves = current_legal_moves(game)
 legal_targets = {move.end for move in legal_moves}
 ready_sources = set() if selected_source is not None else set(available_sources)
 
-control_col, board_col = st.columns([0.92, 1.28], gap="large")
+board_col, control_col = st.columns([1.45, 0.95], gap="large")
+with board_col:
+    st.subheader("Board")
+    st.markdown(
+        "<div class='board-heading'>Click the piece you want to move, then click its destination on the same board.</div>",
+        unsafe_allow_html=True,
+    )
+
+    file_header = st.columns([0.42] + [1] * 8 + [0.42], gap="small")
+    for index, file_name in enumerate("abcdefgh", start=1):
+        file_header[index].markdown(f"<div class='axis-cell'>{file_name}</div>", unsafe_allow_html=True)
+
+    for row_index in range(8):
+        rank = 8 - row_index
+        row_cols = st.columns([0.42] + [1] * 8 + [0.42], gap="small")
+        row_cols[0].markdown(f"<div class='axis-cell'>{rank}</div>", unsafe_allow_html=True)
+        for col_index in range(8):
+            square = (row_index, col_index)
+            if row_cols[col_index + 1].button(
+                square_button_label(game, square, legal_targets),
+                key=f"square_{row_index}_{col_index}",
+                type=square_button_type(game, square, selected_source, legal_targets),
+                help=square_help(game, square, selected_source, legal_targets, ready_sources),
+                use_container_width=True,
+            ):
+                handle_square_click(game, square)
+                st.rerun()
+        row_cols[-1].markdown(f"<div class='axis-cell'>{rank}</div>", unsafe_allow_html=True)
+
+    file_footer = st.columns([0.42] + [1] * 8 + [0.42], gap="small")
+    for index, file_name in enumerate("abcdefgh", start=1):
+        file_footer[index].markdown(f"<div class='axis-cell'>{file_name}</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='board-note'>Gold squares show the current selection, legal destinations, the last move, and a king in check.</div>",
+        unsafe_allow_html=True,
+    )
+
 with control_col:
     st.subheader("Match Controls")
     st.markdown(f"**Turn:** `{game.turn.capitalize()}`")
@@ -343,7 +324,7 @@ with control_col:
     )
     st.markdown(f"**White captured:** {' '.join(piece_symbol(piece) for piece in game.captured_pieces['white']) or 'None'}")
     st.markdown(f"**Black captured:** {' '.join(piece_symbol(piece) for piece in game.captured_pieces['black']) or 'None'}")
-    st.caption("Legend: `+` movable piece, `*` selected, `->` legal target, `!` checked king, `•` last move.")
+    st.caption("Use the board directly. Promotion options appear here only when a pawn reaches the last rank.")
 
     if st.session_state.pending_promotion is not None:
         st.markdown("**Promotion**")
@@ -369,43 +350,3 @@ with control_col:
 
     st.subheader("Move List")
     st.code(format_move_history(game.move_history), language=None)
-
-with board_col:
-    st.subheader("Board")
-    st.caption("Click a piece, then click the square you want to move it to.")
-    st.markdown(
-        render_board(
-            game,
-            selected_source,
-            legal_targets,
-            ready_sources,
-        ),
-        unsafe_allow_html=True,
-    )
-
-    file_header = st.columns([0.5] + [1] * 8 + [0.5], gap="small")
-    for index, file_name in enumerate("abcdefgh", start=1):
-        file_header[index].markdown(f"**{file_name}**")
-
-    for row_index in range(8):
-        rank = 8 - row_index
-        row_cols = st.columns([0.5] + [1] * 8 + [0.5], gap="small")
-        row_cols[0].markdown(f"**{rank}**")
-        for col_index in range(8):
-            square = (row_index, col_index)
-            button_type = "primary" if (
-                square == selected_source or square in legal_targets or square in ready_sources
-            ) else "secondary"
-            if row_cols[col_index + 1].button(
-                square_button_label(game, square, legal_targets, ready_sources),
-                key=f"square_{row_index}_{col_index}",
-                type=button_type,
-                use_container_width=True,
-            ):
-                handle_square_click(game, square)
-                st.rerun()
-        row_cols[-1].markdown(f"**{rank}**")
-
-    file_footer = st.columns([0.5] + [1] * 8 + [0.5], gap="small")
-    for index, file_name in enumerate("abcdefgh", start=1):
-        file_footer[index].markdown(f"**{file_name}**")
