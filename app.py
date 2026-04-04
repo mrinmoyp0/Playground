@@ -158,6 +158,45 @@ PAGE_CSS = """
         min-height: 2.7rem;
         border-radius: 14px;
         font-weight: 600;
+        background: linear-gradient(180deg, #fff8ec, #ead8b7);
+        color: #3c2817;
+        border: 1px solid rgba(92, 62, 34, 0.22);
+        box-shadow:
+            0 10px 18px rgba(92, 62, 34, 0.10),
+            inset 0 1px 0 rgba(255, 255, 255, 0.65);
+        transition:
+            transform 120ms ease,
+            box-shadow 120ms ease,
+            filter 120ms ease;
+    }
+    div.stButton > button:hover {
+        background: linear-gradient(180deg, #fffaf1, #efdcb9);
+        color: #2f1f12;
+        border-color: rgba(139, 90, 43, 0.38);
+        box-shadow:
+            0 12px 22px rgba(92, 62, 34, 0.14),
+            inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        transform: translateY(-1px);
+    }
+    div.stButton > button:disabled {
+        background: linear-gradient(180deg, #eee4d2, #dfd0b8);
+        color: rgba(60, 40, 23, 0.58);
+        border-color: rgba(92, 62, 34, 0.14);
+        box-shadow: none;
+        opacity: 1;
+        cursor: not-allowed;
+    }
+    div.stButton > button[kind="primary"] {
+        background: linear-gradient(180deg, #b78043, #8d5a2f);
+        color: #fff7ee;
+        border-color: rgba(88, 48, 20, 0.38);
+        box-shadow:
+            0 12px 22px rgba(96, 57, 27, 0.20),
+            inset 0 1px 0 rgba(255, 236, 208, 0.30);
+    }
+    div.stButton > button[kind="primary"]:hover {
+        background: linear-gradient(180deg, #c48a49, #996133);
+        color: #fffaf4;
     }
     .board-wrap {
         padding-top: 0.15rem;
