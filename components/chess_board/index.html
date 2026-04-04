@@ -39,20 +39,20 @@
       }
 
       body {
-        padding: 10px 6px;
+        padding: 2px 2px 0;
         background:
           radial-gradient(circle at top, rgba(255, 255, 255, 0.35), transparent 34%),
           radial-gradient(circle at bottom, rgba(93, 61, 31, 0.12), transparent 42%);
       }
 
       .stage {
-        max-width: 760px;
+        width: min(100%, 740px);
         margin: 0 auto;
       }
 
       .frame {
         position: relative;
-        padding: 18px;
+        padding: 14px;
         border-radius: 34px;
         background:
           radial-gradient(circle at top left, rgba(255, 255, 255, 0.25), transparent 28%),
@@ -76,7 +76,7 @@
 
       .inner-frame {
         position: relative;
-        padding: 14px;
+        padding: 10px;
         border-radius: 26px;
         background:
           radial-gradient(circle at top left, rgba(255, 255, 255, 0.14), transparent 30%),
@@ -88,7 +88,7 @@
 
       .board-plane {
         position: relative;
-        margin: 8px 0 20px;
+        margin: 2px 0 8px;
       }
 
       .board-plane::before {
@@ -150,7 +150,7 @@
       .axis-row,
       .board-row {
         display: grid;
-        grid-template-columns: 26px repeat(8, minmax(0, 1fr)) 26px;
+        grid-template-columns: 22px repeat(8, minmax(0, 1fr)) 22px;
         gap: 0;
       }
 
@@ -158,9 +158,9 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 26px;
+        min-height: 22px;
         color: rgba(255, 246, 233, 0.86);
-        font-size: 0.84rem;
+        font-size: 0.78rem;
         font-weight: 700;
         letter-spacing: 0.03em;
         user-select: none;
@@ -294,10 +294,7 @@
       }
 
       .board-caption {
-        margin-top: 10px;
-        text-align: center;
-        color: var(--muted);
-        font-size: 0.95rem;
+        display: none;
       }
 
       .promotion-overlay {
@@ -376,21 +373,22 @@
         }
 
         .frame {
-          padding: 10px;
+          padding: 8px;
           border-radius: 22px;
         }
 
         .inner-frame {
-          padding: 8px;
+          padding: 6px;
         }
 
         .axis-row,
         .board-row {
-          grid-template-columns: 20px repeat(8, minmax(0, 1fr)) 20px;
+          grid-template-columns: 18px repeat(8, minmax(0, 1fr)) 18px;
         }
 
         .axis-cell {
-          font-size: 0.72rem;
+          min-height: 18px;
+          font-size: 0.66rem;
         }
       }
     </style>
