@@ -31,6 +31,22 @@ PAGE_CSS = """
         color: var(--ink);
         font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
     }
+    header[data-testid="stHeader"] {
+        display: none;
+    }
+    div[data-testid="stToolbar"] {
+        display: none;
+    }
+    div[data-testid="stDecoration"] {
+        display: none;
+    }
+    div[data-testid="stStatusWidget"] {
+        display: none;
+    }
+    #MainMenu,
+    footer {
+        display: none;
+    }
     .block-container {
         padding-top: 0.35rem;
         padding-bottom: 0.35rem;
