@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from html import escape
+
 import streamlit as st
 
 from chess_board_component import render_chess_board
@@ -12,6 +14,14 @@ PAGE_CSS = """
     :root {
         --ink: #2b2118;
         --panel: rgba(255, 249, 239, 0.92);
+        --panel-strong: rgba(255, 252, 245, 0.96);
+        --line: rgba(78, 54, 31, 0.12);
+        --accent: #8b5a2b;
+        --accent-soft: rgba(139, 90, 43, 0.12);
+        --good: #406a48;
+        --warn: #8e6a25;
+        --bad: #8a3f35;
+        --info: #4f6476;
     }
     .stApp {
         background:
@@ -21,41 +31,156 @@ PAGE_CSS = """
         color: var(--ink);
         font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
     }
-    .hero, .status-strip {
+    .block-container {
+        padding-top: 0.35rem;
+        padding-bottom: 0.35rem;
+        max-width: 1600px;
+    }
+    [data-testid="stHorizontalBlock"] {
+        align-items: start;
+    }
+    .side-card {
         border: 1px solid rgba(43, 33, 24, 0.08);
-        border-radius: 24px;
+        border-radius: 20px;
         background: linear-gradient(135deg, rgba(255, 250, 243, 0.95), rgba(244, 232, 210, 0.9));
         box-shadow: 0 18px 40px rgba(88, 60, 32, 0.08);
+        padding: 0.95rem 1rem;
+        margin-bottom: 0.7rem;
     }
-    .hero {
-        padding: 1.35rem 1.5rem;
-        margin-bottom: 1rem;
+    .title-card {
+        padding: 1rem 1rem 0.9rem;
     }
-    .hero h1 {
+    .title-kicker {
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 0.73rem;
+        color: rgba(70, 50, 30, 0.72);
+        margin-bottom: 0.25rem;
+    }
+    .title-card h1 {
         margin: 0;
-        font-size: clamp(2rem, 4vw, 3.3rem);
-        line-height: 1.05;
-        letter-spacing: 0.02em;
+        font-size: clamp(1.7rem, 2.4vw, 2.45rem);
+        line-height: 1;
+        letter-spacing: 0.01em;
     }
-    .hero p {
-        margin: 0.45rem 0 0;
-        max-width: 48rem;
-        font-size: 1.03rem;
+    .title-card p {
+        margin: 0.35rem 0 0;
+        color: rgba(43, 33, 24, 0.74);
+        font-size: 0.94rem;
+        line-height: 1.35;
     }
-    .status-strip {
-        margin: 0.85rem 0 1rem;
-        padding: 0.9rem 1rem;
+    .card-label {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: rgba(70, 50, 30, 0.72);
+        margin-bottom: 0.28rem;
+    }
+    .status-text {
+        font-size: 1.05rem;
+        font-weight: 700;
+        line-height: 1.25;
+        color: #432d1c;
+        margin-bottom: 0.55rem;
+    }
+    .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
+    }
+    .meta-item {
+        border: 1px solid var(--line);
+        background: var(--panel-strong);
+        border-radius: 14px;
+        padding: 0.55rem 0.7rem;
+    }
+    .meta-item span {
+        display: block;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        color: rgba(70, 50, 30, 0.64);
+        margin-bottom: 0.15rem;
+    }
+    .meta-item strong {
+        display: block;
+        font-size: 0.98rem;
+    }
+    .capture-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.8rem;
+        padding: 0.45rem 0;
+        border-bottom: 1px solid var(--line);
+    }
+    .capture-line:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+    .capture-line span {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: rgba(70, 50, 30, 0.68);
+    }
+    .capture-line strong {
+        font-size: 1rem;
+        text-align: right;
+        font-weight: 700;
+    }
+    .notice-card {
+        border-radius: 18px;
+        padding: 0.8rem 0.95rem;
+        border: 1px solid var(--line);
+        background: var(--panel-strong);
+        box-shadow: 0 14px 30px rgba(88, 60, 32, 0.06);
+        margin-bottom: 0.7rem;
+    }
+    .notice-card.info { border-left: 5px solid var(--info); }
+    .notice-card.success { border-left: 5px solid var(--good); }
+    .notice-card.warning { border-left: 5px solid var(--warn); }
+    .notice-card.error { border-left: 5px solid var(--bad); }
+    .notice-card strong {
+        display: block;
+        margin-bottom: 0.2rem;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: rgba(70, 50, 30, 0.75);
+    }
+    .notice-card p {
+        margin: 0;
+        font-size: 0.95rem;
+        line-height: 1.35;
     }
     div.stButton > button {
-        min-height: 2.9rem;
-        border-radius: 16px;
+        min-height: 2.7rem;
+        border-radius: 14px;
         font-weight: 600;
     }
-    .board-copy {
-        text-align: center;
-        color: rgba(43, 33, 24, 0.8);
-        margin: 0.2rem 0 0.75rem;
-        font-size: 0.98rem;
+    .board-wrap {
+        padding-top: 0.15rem;
+    }
+    .move-box {
+        margin: 0;
+        padding: 0.8rem 0.9rem;
+        border-radius: 16px;
+        background: #211812;
+        color: #f4eadc;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 0.88rem;
+        line-height: 1.45;
+        max-height: 210px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .mini-note {
+        color: rgba(43, 33, 24, 0.7);
+        font-size: 0.84rem;
+        line-height: 1.35;
+        margin: 0.2rem 0 0.7rem;
     }
 </style>
 """
@@ -92,15 +217,20 @@ def format_move_history(move_history: list[str]) -> str:
     return "\n".join(lines)
 
 
-def show_notice(level: str, message: str) -> None:
-    if level == "success":
-        st.success(message)
-    elif level == "warning":
-        st.warning(message)
-    elif level == "error":
-        st.error(message)
-    else:
-        st.info(message)
+def notice_markup(level: str, message: str) -> str:
+    titles = {
+        "success": "Move Accepted",
+        "warning": "Heads Up",
+        "error": "Illegal Move",
+        "info": "Now Playing",
+    }
+    title = titles.get(level, "Notice")
+    return f"""
+    <div class="notice-card {escape(level)}">
+        <strong>{escape(title)}</strong>
+        <p>{escape(message)}</p>
+    </div>
+    """
 
 
 def current_legal_moves(game: ChessGame) -> list[Move]:
@@ -210,36 +340,20 @@ def serialize_board_state(
 init_state()
 game: ChessGame = st.session_state.game
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
-st.markdown(
-    """
-    <div class="hero">
-        <h1>Offline Chess Duel</h1>
-        <p>Local two-player chess</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-st.markdown(f"<div class='status-strip'><strong>Status</strong><br>{game.status}</div>", unsafe_allow_html=True)
-
-notice_level, notice_message = st.session_state.notice
-show_notice(notice_level, notice_message)
 
 available_sources = game.available_source_squares()
 selected_source = st.session_state.selected_square
 legal_moves = current_legal_moves(game)
 legal_targets = {move.end for move in legal_moves}
 ready_sources = set() if selected_source is not None else set(available_sources)
+notice_level, notice_message = st.session_state.notice
 
-board_col, control_col = st.columns([1.55, 0.9], gap="large")
+board_col, control_col = st.columns([1.82, 0.86], gap="large")
 with board_col:
-    st.subheader("Board")
-    st.markdown(
-        "<div class='board-copy'>Click directly on the board. Empty legal targets glow on the board itself, and promotion choices appear over the board.</div>",
-        unsafe_allow_html=True,
-    )
     board_event = render_chess_board(
         serialize_board_state(game, selected_source, legal_targets, ready_sources),
         key="main_chess_board",
+        height=655,
     )
 
 if board_event is not None:
@@ -253,22 +367,60 @@ if board_event is not None:
         st.rerun()
 
 with control_col:
-    st.subheader("Match Controls")
-    st.markdown(f"**Turn:** `{game.turn.capitalize()}`")
     st.markdown(
-        f"**Selected square:** `{square_name(selected_source)}`"
-        if selected_source is not None
-        else "**Selected square:** `None`"
+        """
+        <div class="side-card title-card">
+            <div class="title-kicker">Offline Two-Player Chess</div>
+            <h1>Offline Chess Duel</h1>
+            <p>Play directly on the board. All match details stay in this right-hand panel.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-    st.markdown(f"**White captured:** {' '.join(piece_symbol(piece) for piece in game.captured_pieces['white']) or 'None'}")
-    st.markdown(f"**Black captured:** {' '.join(piece_symbol(piece) for piece in game.captured_pieces['black']) or 'None'}")
-    st.caption("The board handles square selection and promotion directly. These controls are just for match management.")
+    st.markdown(
+        f"""
+        <div class="side-card">
+            <div class="card-label">Status</div>
+            <div class="status-text">{escape(game.status)}</div>
+            <div class="meta-grid">
+                <div class="meta-item">
+                    <span>Turn</span>
+                    <strong>{escape(game.turn.capitalize())}</strong>
+                </div>
+                <div class="meta-item">
+                    <span>Selected</span>
+                    <strong>{escape(square_name(selected_source) if selected_source is not None else 'None')}</strong>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(notice_markup(notice_level, notice_message), unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div class="side-card">
+            <div class="card-label">Captured Pieces</div>
+            <div class="capture-line">
+                <span>White</span>
+                <strong>{escape(' '.join(piece_symbol(piece) for piece in game.captured_pieces['white']) or 'None')}</strong>
+            </div>
+            <div class="capture-line">
+                <span>Black</span>
+                <strong>{escape(' '.join(piece_symbol(piece) for piece in game.captured_pieces['black']) or 'None')}</strong>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown("<div class='mini-note'>Use these controls for selection resets, undo, and starting a new match. The board itself handles moves and promotion.</div>", unsafe_allow_html=True)
 
-    if st.button("Clear selection", disabled=selected_source is None, use_container_width=True):
+    action_left, action_right = st.columns(2, gap="small")
+    if action_left.button("Clear Selection", disabled=selected_source is None, use_container_width=True):
         reset_interaction(("info", "Selection cleared."))
         st.rerun()
 
-    if st.button("Undo last move", disabled=not game.history_stack, use_container_width=True):
+    if action_right.button("Undo Move", disabled=not game.history_stack, use_container_width=True):
         success, message = game.undo()
         reset_interaction(("info", message) if success else ("warning", message))
         st.rerun()
@@ -278,5 +430,12 @@ with control_col:
         reset_interaction(("info", "Fresh board ready. White to move."))
         st.rerun()
 
-    st.subheader("Move List")
-    st.code(format_move_history(game.move_history), language=None)
+    st.markdown(
+        f"""
+        <div class="side-card">
+            <div class="card-label">Move List</div>
+            <pre class="move-box">{escape(format_move_history(game.move_history))}</pre>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
